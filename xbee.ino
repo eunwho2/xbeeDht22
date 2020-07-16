@@ -1,4 +1,4 @@
-String fs="M,802"; 
+String fs="V0.0"; 
 
 // ZigBee:38400 baud
 #define baudXBee 38400
@@ -64,9 +64,24 @@ float tmpScale;
 float tmpOffset;
 float roomTemp;
 float roomHumi;
+
+String rxZbee = "";
+String myZbee = "";
+String mpZbee = "";
+String shZbee = "";
+String slZbee = "";
+String dhZbee = "";
+String dlZbee = "";
+String dbZbee = "";
+String niZbee = "";
+
+     
 void setup() {
 
+  digitalWrite(5,HIGH);
+  delay(100);
   dht.begin();
+  delay(500);
 
   float x1,x2,y1,y2;
   
@@ -78,135 +93,130 @@ void setup() {
 
 
 // 환경 변수 초기화
-          analogReference(INTERNAL);
+  analogReference(INTERNAL);
 
-          pinMode(9,OUTPUT);  // 1= solar down
-          pinMode(5,OUTPUT);  // 1= sensor power on 
-          pinMode(13,OUTPUT); // 1= ZigBee hibernation 
-          pinMode(8,OUTPUT);  // run indicator
-          pinMode(2,INPUT_PULLUP); //
+  pinMode(9,OUTPUT);  // 1= solar down
+  pinMode(5,OUTPUT);  // 1= sensor power on 
+  pinMode(13,OUTPUT); // 1= ZigBee hibernation 
+  pinMode(8,OUTPUT);  // run indicator
+  pinMode(2,INPUT_PULLUP); //
 
-          digitalWrite(9,LOW); // 태양전지 연결
-          digitalWrite(5,LOW);
-          digitalWrite(13,LOW);  //
+  digitalWrite(9,LOW); // 태양전지 연결
+  //digitalWrite(5,LOW);
+  digitalWrite(13,LOW);  //
 
 // ZigBee 통신 설정, 38400
-          Serial.begin(baudXBee);//Serial.begin(38400); // ZigBee port
-          while (!Serial) {
-            ; // wait for serial port to connect. Needed for native USB port only
-          }
-//test(1);
-// 센서 통신 설정 및 연결 파악
-          // set the data rate for the SoftwareSerial port
-          mySerial.begin(9600);
+  Serial.begin(baudXBee);//Serial.begin(38400); // ZigBee port
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
+  analogReference(DEFAULT);
+   getTempVolt();
+  analogReference(INTERNAL);
+  
+  ATCmd("MY"); myZbee = rxZbee;
+  ATCmd("MP"); mpZbee = rxZbee;
+  ATCmd("SH"); shZbee = rxZbee;
+  ATCmd("SL"); slZbee = rxZbee;
+  ATCmd("DH"); dhZbee = rxZbee;
+  ATCmd("DL"); dlZbee = rxZbee;
+  ATCmd("DB"); dbZbee = rxZbee;
+  ATCmd("NI"); niZbee = rxZbee;
 
-          eead=0;
-          EEPROM.write(eead,255);
-          digitalWrite(5,HIGH); //avtivate sensor power
-          delay(30);
-          Find();
-          eer();
-          digitalWrite(5,LOW);
-//       digitalWrite(8,HIGH);
-//  test(1); 
-// Master info send
-          analogReference(DEFAULT);
-           getTempVolt();
-          analogReference(INTERNAL);
-// test(2);          
-                masterSend();
-// test(3);
-        //        delay(300);
-                pd_setup();
-        }
+  masterSend();
+  pd_setup();
+}
+
 void loop(){
-
-
-        loop1();
-        
-        digitalWrite(5,LOW);
-        digitalWrite(13,HIGH);
-        digitalWrite(8,HIGH);
-        wait_pd();
-        digitalWrite(8,LOW);
+  loop1();
+  
+//  digitalWrite(5,LOW);
+  digitalWrite(13,HIGH);
+  digitalWrite(8,HIGH);
+  wait_pd();
+  digitalWrite(8,LOW);
 }
 
 void loop1() 
 { 
-        //160526
-          if(Serial) Serial.end();
-          Serial.begin(baudXBee);//Serial.begin(38400);
-          while (!Serial) {
-            ; // wait for serial port to connect. Needed for native USB port only
-          }
+  if(Serial) Serial.end();
+  Serial.begin(baudXBee);//Serial.begin(38400);
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB port only
+  }
 
-          analogReference(DEFAULT);
-           getTempVolt();
-          analogReference(INTERNAL);
-//              Serial.print("t = ");
-//              Serial.print(coreTemp);
-//              Serial.print(", volt = ");
-//              Serial.print(currentVolt);
-//              Serial.println("");
-            
-        //while(Serial.available()){}
-        //delay(300);
-        v2 = batteryVolt(); //float (analogRead(A3))/f200;
-        v1 = solarVolt(); //float (analogRead(A2))/f200s;
-        
-        if (v2>lowerBatteryVolt) {
-          sensorSend();
-        }
+  analogReference(DEFAULT);
+   getTempVolt();
+  analogReference(INTERNAL);
+  v2 = batteryVolt(); //float (analogRead(A3))/f200;
+  v1 = solarVolt(); //float (analogRead(A2))/f200s;
+
+  if (v2>lowerBatteryVolt) sensorSend();
+  else                     lowVoltSend();
 }
+
 
 void solarControl()
 {
-                  digitalWrite(9,LOW);
-                     delay(50);
-                    v2=batteryVolt(); //float (analogRead(A3))/f200;
-                    v1=solarVolt(); //float (analogRead(A2))/f200s;
-
-                    if (v2>upperBatteryVolt)
-                    {
-                            digitalWrite(9,HIGH); //  Serial.println("Solar Down");
-                    }
-                    else digitalWrite(9,LOW);
- 
+  digitalWrite(9,LOW);
+  delay(50);
+  v2=batteryVolt(); //float (analogRead(A3))/f200;
+  v1=solarVolt(); //float (analogRead(A2))/f200s;
+  
+  if (v2 >upperBatteryVolt) digitalWrite(9,HIGH); //  Serial.println("Solar Down");
+  else                      digitalWrite(9,LOW);
+  
 }
 
-void masterSend()
+void lowVoltSend()
 {
-    solarControl();  
+  static uint16_t cntLowV=0;
+  String txZbee = "";
 
-    digitalWrite(13,LOW);
-    delay(5);
-      ATCmd("DB"); dbString = s;
-
-      zbInfo="";
-      ATCmd("MY"); zbInfo+=",MY:"+s;
-      ATCmd("MP"); zbInfo+=",MP:"+s;
-//      ATCmd("SH"); zbInfo+=",SH:"+s;
-//      ATCmd("SL"); zbInfo+=",SL:"+s;
-      ATCmd("DH"); zbInfo+=",DH:"+s;
-      ATCmd("DL"); zbInfo+=",DL:"+s;
-      ATCmd("%V"); zbInfo+=",%V:"+s;
-      ATCmd("NI"); nameNI= s; // ss+=":"+s;
-
-    ss=fs;                  //Serial.print(fs);
-    ss += zbInfo;             //Serial.print(",");
-    ss +=",SV:"+String(v1,2)+",BV:"+String(v2,2);
-    // ss +=",CT:"+String(coreTemp,2);
-    ss +=",CV:"+String(currentVolt,1);
-
-    ss += ",DB:"+ dbString;
-    ss += "," + nameNI;
-    ss += ","+String(strCnt++);
-    
-    Serial.println(ss);
-    delay(50);
-    digitalWrite(13,HIGH);
+  digitalWrite(13,LOW);
+  delay(5);          
+  
+  txZbee = niZbee;
+  txZbee += ",BV:"+String(v2,2);
+  // txZbee +=",CT:"+String(coreTemp,2);
+  txZbee +=",CV:"+String(currentVolt,1);
+  txZbee += ",DB:"+ dbZbee;
+  // txZbee += "," + niZbee;
+  txZbee += ","+String(cntLowV++);   
+  Serial.println(txZbee);
+  delay(50);
+  digitalWrite(13,HIGH); 
 }
+void masterSend(){
+  
+  static uint16_t cntMast=0;
+  
+  String txZbee = "";
+  solarControl();  
 
+  digitalWrite(13,LOW);
+  delay(5);          
+
+  txZbee = "";
+  txZbee += fs;
+  txZbee += ",MY:"+ myZbee;
+  txZbee += ","+ mpZbee;
+  txZbee += ",SH:"+ shZbee;
+  txZbee += ","+ slZbee;
+  txZbee += ",DH:"+ dhZbee;
+  txZbee += ","+ dlZbee;
+  txZbee += ",SV:"+String(v1,2);
+  txZbee += ",BV:"+String(v2,2);
+  // txZbee +=",CT:"+String(coreTemp,2);
+  txZbee +=",CV:"+String(currentVolt,1);
+  txZbee += ",DB:"+ dbZbee;
+  txZbee += "," + niZbee;
+  txZbee += ","+String(cntMast++);  
+
+  Serial.println(txZbee);
+  delay(100);
+  digitalWrite(13,HIGH); 
+}
 
 void sensorSend()
 {
@@ -214,53 +224,76 @@ void sensorSend()
   static uint16_t cntSensSend=0;
   String txZbee="";
   String nameZbee="";
-
   float humidity,temperature;
-  
+
+  digitalWrite(13,LOW);
+  //digitalWrite(5,HIGH);
+  delay(10);
+  //dht.begin();
+  //delay(100);
+
   cntSensSend ++; cntSendMast ++;
+  solarControl();  
   
-  if ( cntSendMast > 4 ) {
+  
+  if ( cntSendMast > 8 ) {
     cntSendMast = 0 ; masterSend(); return;
   } 
-  solarControl();  
+  switch(cntSensSend){
+    case 1:  ATCmd("MY"); myZbee = rxZbee; break;
+    case 2:  ATCmd("MP"); mpZbee = rxZbee; break;
+    case 3:  ATCmd("SH"); shZbee = rxZbee; break;
+    case 4:  ATCmd("SL"); slZbee = rxZbee; break;
+    case 5:  ATCmd("DH"); dhZbee = rxZbee; break;
+    case 6:  ATCmd("DL"); dlZbee = rxZbee; break;
+    case 7:  ATCmd("DB"); dbZbee = rxZbee; break;
+    case 8:  ATCmd("NI"); niZbee = rxZbee; break;
+  }   
+  
+  ATCmd("NI"); nameZbee = rxZbee; 
+  txZbee = nameZbee;
   humidity = dht.readHumidity();
   temperature = dht.readTemperature();
 
-  digitalWrite(13,LOW);
-  ATCmd("NI"); nameZbee = s; // ss+=":"+s;
-  txZbee += nameZbee;
+  //humidity = 56.78;
+  //temperature = 12.34;
+
   txZbee += ",TR:"+String(temperature,2);
   txZbee += ",HR:"+String(humidity,2);
   txZbee += ","+ String(cntSensSend);
   
   Serial.println(txZbee);
 
-  delay(50);//100
+  delay(100);//100
+//  digitalWrite(5,LOW);
   digitalWrite(13,HIGH);
 }
 
-/////////////////////////////////////////////////
-//
-//   Functions
-//
-/////////////////////////////////////////////////
-float solarVolt()
-{
+float solarVolt(){
   return float (analogRead(A2))/135.6;
 }
-float batteryVolt()
-{
+float batteryVolt(){
   return float (analogRead(A3))/230;
 }
 
 void ATCmd(String c)
+{
+  if (xBeeConn()){
+    c="AT"+c;
+    Serial.println(c);
+    Serial.setTimeout(500);
+    rxZbee =Serial.readStringUntil(13);
+  }
+  if ( xBeeDisConn());
+}
+void ATCmd1(String c)
 {
           if (xBeeConn())
           {
                       c="AT"+c;
                       Serial.println(c);
                       Serial.setTimeout(500);
-                      s=Serial.readStringUntil(13);
+                      rxZbee =Serial.readStringUntil(13);
 //                      s.replace("\r","");
           }
           if ( xBeeDisConn())
@@ -270,41 +303,29 @@ void ATCmd(String c)
 //            Serial.println(s);
           }
 }
-//////////////////////////////////////////
-
 int xBeeConn()
-  {
-            Serial.flush();
-            delay(5);
-            Serial.print("+++");
-          //  delay(100);  delay(1400);
-          //  delay(20);
-            return checkOK();
-  }
+{
+  Serial.flush();
+  delay(5);
+  Serial.print("+++");
+  return checkOK();
+}
 
 int xBeeDisConn()
-  {
-        Serial.println("ATCN");
-        return checkOK();
-  }
+{
+  Serial.println("ATCN");
+  return checkOK();
+}
 
 int checkOK()
-  {
-          String reply="";
-          char r=0;
-          Serial.setTimeout(300);
-          reply=Serial.readStringUntil(13);
-          if( reply =="OK")
-          {
-              return 1;
-          } else
-          {
-              return 0;
-          }
-   
-  }
-/////////////////////////////////////////////////////
-
+{
+  String reply="";
+  char r=0;
+  Serial.setTimeout(300);
+  reply=Serial.readStringUntil(13);
+  if( reply =="OK") return 1;
+  else              return 0;
+}
 
 void getTempVolt()
 {
@@ -327,68 +348,16 @@ void getTempVolt()
    currentVolt = ( currentVolt / 1024) * 1.1 * 13.3 / 3.3;           
 }
 
-
-
-
-void test(int i){
-      unsigned long t=millis();
-
-      pinMode(7,1);
-      while(millis()-t<i*1000)
-      {
-          digitalWrite(7,1);
-          delay(1);
-          digitalWrite(7,0);         
-          delay(1);
-
-      }
-}
-
-
 void wait_pd()
 {
-          digitalWrite(13,HIGH);//160516
-          for (cnt=0; cnt<rep0; cnt++)
-          { 
-              //    Serial.println(millis());delay(10);
-                  f_wdt = 0;
-                  enterSleep();  //Serial.println(millis());
-
-//                  digitalWrite(13,LOW);
-//                  delay(10);
-//                  digitalWrite(13,HIGH);
-/*
-                  Serial.end();
-                  Serial.begin(9600);
-                  while (!Serial) {
-                    ; // wait for serial port to connect. Needed for native USB port only
-                  }
-                  pinMode(13,OUTPUT); 
-
-                  //digitalWrite(5,LOW);
-                  digitalWrite(13,LOW);
-                  delay(100);
-                  Serial.print("WDT cnt=");
-                  Serial.println(cnt);
-                  delay(100);
-                  
-                  digitalWrite(13,HIGH);
-*/
-          }
+  digitalWrite(13,HIGH);//160516
+  for (cnt=0; cnt<rep0; cnt++)
+  { 
+      f_wdt = 0;
+      enterSleep();  //Serial.println(millis());
+  }
 }
 
-
-/***************************************************
- *  Name:        ISR(WDT_vect)
- *
- *  Returns:     Nothing.
- *
- *  Parameters:  None.
- *
- *  Description: Watchdog Interrupt Service. This
- *               is executed when watchdog timed out.
- *
- ***************************************************/
 ISR(WDT_vect)
 {
       if(f_wdt == 0)
@@ -400,16 +369,7 @@ ISR(WDT_vect)
 //        Serial.println("WDT Overrun!!!");
       }
 }
-/***************************************************
- *  Name:        enterSleep
- *
- *  Returns:     Nothing.
- *
- *  Parameters:  None.
- *
- *  Description: Enters the arduino into sleep mode.
- *
- ***************************************************/
+
 void enterSleep(void)
 {
           set_sleep_mode(SLEEP_MODE_PWR_DOWN);//SLEEP_MODE_PWR_SAVE);   /* EDIT: could also use SLEEP_MODE_PWR_DOWN for lowest power consumption. */
@@ -424,23 +384,9 @@ void enterSleep(void)
           /* Re-enable the peripherals. */
           power_all_enable();
 }
-/***************************************************
- *  Name:        setup
- *
- *  Returns:     Nothing.
- *
- *  Parameters:  None.
- *
- *  Description: Setup for the serial comms and the
- *                Watch dog timeout.
- *
- ***************************************************/
+
 void pd_setup()
 {
-//        Serial.begin(9600);
-//        Serial.println("Initialising...");
-//        delay(100); //Allow for serial print to complete.
- //       pinMode(LED_PIN,OUTPUT);
         /*** Setup the WDT ***/
         /* Clear the reset flag. */
         MCUSR &= ~(1<<WDRF);
@@ -455,28 +401,15 @@ void pd_setup()
 //        Serial.println("Initialisation complete.");
 //        delay(100); //Allow for serial print to complete.
 }
-/***************************************************
- *  Name:        enterSleep
- *
- *  Returns:     Nothing.
- *
- *  Parameters:  None.
- *
- *  Description: Main application loop.
- *
- ***************************************************/
+
 void eewr(int i)
 {
-//        Serial.println();
-//        Serial.print("EEwr");
-//        Serial.println(eead);
         EEPROM.write(eead,i/256);
         eead++;
         EEPROM.write(eead,i%256);
         eead++;
         EEPROM.write(eead,255);
 }
-
 
 void eer()
 {
@@ -495,7 +428,7 @@ void eer()
           {
             eer0[i]=EEPROM.read(i*2)*256;
             eer0[i]+=EEPROM.read(i*2+1);
-//            Serial.print(i);
+//            Serial.print(i);tag
 //            Serial.print(":");
 //            Serial.println(eer0[i]);
           }
@@ -519,9 +452,6 @@ void Find()
               if (i<10) mySerial.print("0");
               mySerial.print(i);
               mySerial.write(13);
-          //  delay(20);
-          //  delay(10);
-          //  delay(2);
             delay(5);
           //  delay(4);
 //          Serial.setTimeout(200);
